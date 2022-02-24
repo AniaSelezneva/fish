@@ -1,0 +1,19 @@
+.wrapper {
+  height: 100vh;
+  position: relative;
+
+  #canv {
+    height: 100%;
+    width: 100%;
+  }
+}
+
+#inventory {
+  height: 100px;
+  width: 100vw;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 100;
+  background: green;
+}
