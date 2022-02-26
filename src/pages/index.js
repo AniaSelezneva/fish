@@ -10,7 +10,7 @@ import {
   createCamera,
   createLight,
   createControls,
-  setWalls,
+  setAquarium,
   makeGameObjectManager,
   makePlayer,
   makeBubbles,
@@ -19,6 +19,7 @@ import {
   withDialogue,
   createTable,
   createWater,
+  setWalls,
 } from "./utils";
 
 const log = console.log;
@@ -37,11 +38,12 @@ function Index() {
   const globals = { delta: undefined, moveSpeed: 2.7, moveDistance: 0.02 };
   const clock = new Clock();
   const camera = createCamera();
-  const light = createLight();
+  const light = createLight(scene);
   const { floor, floorTop } = createPlane();
   const table = createTable();
   const water = createWater();
-  const { wall1, wall2 } = setWalls(scene);
+  setAquarium(scene);
+  setWalls(scene);
   const gameObjectManager = makeGameObjectManager();
   const models = {
     fish: { url: "/models/fish.gltf" },
@@ -81,6 +83,7 @@ function Index() {
     scene.add(light);
     scene.add(table);
     scene.add(water);
+
     createControls(camera, canvas.current);
 
     const axesHelper = new THREE.AxesHelper(5);

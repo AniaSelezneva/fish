@@ -100,17 +100,27 @@ const createCamera = () => {
   const fov = 45;
   const aspect = 2; // the canvas default
   const near = 0.1;
-  const far = 500;
+  const far = 1000;
   const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
   camera.position.set(20, 60, 0);
 
   return camera;
 };
 
-const createLight = () => {
+const createLight = (scene) => {
   const light = new THREE.PointLight(0xffcc77, 1);
   light.castShadow = true;
-  light.position.set(0, 20, 20);
+  light.position.set(0, 50, 0);
+
+  {
+    const light = new THREE.DirectionalLight(0xffcc77, 1);
+    light.castShadow = true;
+    light.position.set(-50, 50, 100);
+
+    const helper = new THREE.DirectionalLightHelper(light);
+    scene.add(light);
+    scene.add(helper);
+  }
 
   return light;
 };
@@ -127,7 +137,7 @@ const createControls = (camera, canvas) => {
   controls.update();
 };
 
-const setWalls = (scene) => {
+const setAquarium = (scene) => {
   const geometry1 = new THREE.PlaneGeometry(width + 2, 30, 20, 10);
   const geometry2 = new THREE.PlaneGeometry(height + 2, 30, 20, 10);
   const color = `white`;
@@ -138,7 +148,7 @@ const setWalls = (scene) => {
   //   side: 2,
   //   thickness: 10,
   // });
-  const material = new THREE.MeshBasicMaterial({
+  const material = new THREE.MeshPhongMaterial({
     color,
     transparent: true,
     opacity: 0.2,
@@ -168,15 +178,11 @@ const setWalls = (scene) => {
   scene.add(wall2);
   scene.add(wall3);
   scene.add(wall4);
-
-  //Terrain(geometry, true);
-
-  return { wall1, wall2 };
 };
 
 const createTable = () => {
   const geometry = new THREE.BoxGeometry(300, 200, 10);
-  const material = new THREE.MeshBasicMaterial({ color: "blue" });
+  const material = new THREE.MeshPhongMaterial({ color: "blue" });
   const table = new THREE.Mesh(geometry, material);
   table.rotation.set(-Math.PI / 2, 0, 0);
   table.position.set(0, -10, 0);
@@ -199,6 +205,37 @@ const createWater = () => {
   water.position.set(0, 5, 0);
 
   return water;
+};
+
+const setWalls = (scene) => {
+  const material = new THREE.MeshPhongMaterial({ color: "orange" });
+  {
+    const geometryBottom = new THREE.BoxGeometry(500, 100, 10);
+    const wallBottom = new THREE.Mesh(geometryBottom, material);
+    wallBottom.position.set(-50, -50, 150);
+
+    const wallTop = new THREE.Mesh(geometryBottom, material);
+    wallTop.position.set(-50, 150, 150);
+
+    const geometryLeft = new THREE.BoxGeometry(100, 100, 10);
+    const wallLeft = new THREE.Mesh(geometryLeft, material);
+    wallLeft.position.set(150, 50, 150);
+
+    const geometryRight = new THREE.BoxGeometry(250, 100, 10);
+    const wallRight = new THREE.Mesh(geometryRight, material);
+    wallRight.position.set(-150, 50, 150);
+
+    scene.add(wallBottom);
+    scene.add(wallTop);
+    scene.add(wallLeft);
+    scene.add(wallRight);
+  }
+
+  const geometry = new THREE.BoxGeometry(500, 600, 10);
+  const wallLeft = new THREE.Mesh(geometry, material);
+  wallLeft.rotation.set(0, -Math.PI / 2, 0);
+  wallLeft.position.set(180, 0, -100);
+  scene.add(wallLeft);
 };
 
 // ----------------------------------------------------------------------- //
@@ -434,6 +471,7 @@ const makePlayer = (gameObjectManager, gameObject, model, camera) => {
     for (let i = 0; i < gameObjectManager.gameObjects.array.length; i++) {
       const sideChar = gameObjectManager.gameObjects.array[i];
       sideChar.bounds = sideChar.getBounds(sideChar.transform); // stale
+
       if (
         sideChar.name != "player" &&
         sideChar.name !== "bubble" &&
@@ -445,6 +483,7 @@ const makePlayer = (gameObjectManager, gameObject, model, camera) => {
         bounds.max.z >= sideChar.bounds.min.z
       ) {
         collidedObjName = sideChar.name;
+        log(bounds, sideChar.bounds);
 
         moving = false;
         moveBack(sideChar);
@@ -978,10 +1017,10 @@ function makeSideChar(gameObject, model, position, rotationParams) {
 }
 
 function makeCrab(gameObject, model) {
-  const position = { x: -20, y: -1, z: 10 };
+  const position = { x: 15, y: 0, z: 10 };
   const rotationParams = {
     vector: new THREE.Vector3(0, 1, 0),
-    radians: Math.PI / 2,
+    radians: -Math.PI / 1.5,
   };
   const playerObj = this;
 
@@ -1003,7 +1042,7 @@ export {
   createCamera,
   createLight,
   createControls,
-  setWalls,
+  setAquarium,
   makeGameObjectManager,
   makePlayer,
   makeBubbles,
@@ -1012,4 +1051,5 @@ export {
   withDialogue,
   createTable,
   createWater,
+  setWalls,
 };
