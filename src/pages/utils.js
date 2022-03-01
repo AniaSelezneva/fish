@@ -5,8 +5,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 const log = console.log;
-const width = 60;
-const height = 50;
+const width = 30;
+const height = 20;
 
 function compose(...fns) {
   return function composed(value) {
@@ -102,7 +102,8 @@ const createCamera = () => {
   const near = 0.1;
   const far = 1000;
   const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-  camera.position.set(20, 60, 0);
+  camera.position.set(-50, 0, -50);
+  camera.lookAt(0, 0, 0);
 
   return camera;
 };
@@ -131,7 +132,9 @@ const createControls = (camera, canvas) => {
 
   // controls.enableZoom = false;
   // controls.enableRotate = false;
-  // controls.enablePan = false;
+  controls.enablePan = false;
+  controls.minDistance = 0;
+  controls.maxDistance = 100;
 
   controls.target.set(0, 5, 0);
   controls.update();
@@ -193,7 +196,7 @@ const createTable = () => {
 const createWater = () => {
   const color = `blue`;
   const geometry = new THREE.BoxGeometry(width, 20, height);
-  const material = new THREE.MeshPhongMaterial({
+  const material = new THREE.MeshBasicMaterial({
     color,
     flatShading: true,
     shininess: 3,
@@ -231,11 +234,26 @@ const setWalls = (scene) => {
     scene.add(wallRight);
   }
 
-  const geometry = new THREE.BoxGeometry(500, 600, 10);
-  const wallLeft = new THREE.Mesh(geometry, material);
-  wallLeft.rotation.set(0, -Math.PI / 2, 0);
-  wallLeft.position.set(180, 0, -100);
-  scene.add(wallLeft);
+  {
+    const geometry = new THREE.BoxGeometry(500, 600, 10);
+    const wallLeft = new THREE.Mesh(geometry, material);
+    wallLeft.rotation.set(0, -Math.PI / 2, 0);
+    wallLeft.position.set(180, 0, -100);
+    scene.add(wallLeft);
+  }
+  {
+    const geometry = new THREE.BoxGeometry(500, 600, 10);
+    const wallRight = new THREE.Mesh(geometry, material);
+    wallRight.rotation.set(0, -Math.PI / 2, 0);
+    wallRight.position.set(-200, 0, -100);
+    scene.add(wallRight);
+  }
+  {
+    const geometry = new THREE.BoxGeometry(700, 600, 10);
+    const wall = new THREE.Mesh(geometry, material);
+    wall.position.set(-150, 50, -150);
+    scene.add(wall);
+  }
 };
 
 // ----------------------------------------------------------------------- //
@@ -740,7 +758,7 @@ function withEyesMovement(char) {
   let { transform, update, gameObject, bounds, getPlayerLocalPos } = char;
   const eyes = { left: undefined, right: undefined };
   let direction = new Vector3(); // direction towards which crab's eyes will move
-  const defaultDestToLook = new Vector3(-10, 0, 10);
+  const defaultDestToLook = new Vector3(0, 0, 0);
   let playerLocalPosition = getPlayerLocalPos();
 
   // Traverse through crab to find eyes' bones
@@ -789,10 +807,10 @@ function withEyesMovement(char) {
   // SEE IF PLAYER IS IN THE FIELD OF VIEW
   const isPlayerInFoV = () => {
     if (
-      playerObj.transform.position.x >= transform.position.x &&
-      playerObj.transform.position.x <= transform.position.x + 20 &&
-      playerObj.transform.position.z <= transform.position.z + 10 &&
-      playerObj.transform.position.z >= transform.position.z - 10
+      playerObj.transform.position.x <= transform.position.x &&
+      playerObj.transform.position.x >= transform.position.x - 11 &&
+      playerObj.transform.position.z >= transform.position.z - 13 &&
+      playerObj.transform.position.z <= transform.position.z + 1
     ) {
       return true;
     } else {
@@ -840,7 +858,8 @@ function withEyesMovement(char) {
 
 // SHOW DIALOGUE MIXIN
 function withDialogue(gameObjectManager, scene, model, char) {
-  let { bounds, gameObject, getPlayerLocalPos } = char;
+  let { bounds, gameObject, getPlayerLocalPos, rotationParams } = char;
+  log(rotationParams);
   let playerLocalPosition = getPlayerLocalPos();
 
   const dialObj = gameObjectManager.createGameObject(
@@ -857,14 +876,13 @@ function withDialogue(gameObjectManager, scene, model, char) {
   transform.position.set(objTopCenter.x, objTopCenter.y, objTopCenter.z);
 
   // Dialogue
-  let dial = undefined;
-  let dialSize = new Vector3();
   let dialTexture = undefined;
   let lines = this;
   let lineNum = 0;
   let line = lines[lineNum];
   let linesTotal = lines.length;
-  const rotRad = Math.PI / 2;
+  const rotRad = rotationParams.radians;
+
   const vectorToRotate = new THREE.Vector3(0, 1, 0);
 
   let initRender = true;
@@ -905,15 +923,18 @@ function withDialogue(gameObjectManager, scene, model, char) {
     dialTexture.needsUpdate = true;
   }
 
-  function addDial() {
+  function addLight() {
     const { x, y, z } = transform.position;
-
-    transform.rotateOnAxis(vectorToRotate, rotRad);
-
     const light = new THREE.DirectionalLight(0xffcc77, 1);
-    light.position.set(x + 1, y, z);
+    light.position.set(x - 1, y, z);
     light.target = transform;
     scene.add(light);
+  }
+
+  function addDial() {
+    transform.rotateOnAxis(vectorToRotate, rotRad);
+
+    addLight();
 
     addTextureToDial();
   }
@@ -929,7 +950,6 @@ function withDialogue(gameObjectManager, scene, model, char) {
   }
 
   const changeText = () => {
-    log(lineNum, linesTotal);
     if (lineNum < linesTotal && lineNum >= 0) {
       createTextureWithText(lines[lineNum]);
       addTextureToDial();
@@ -940,10 +960,10 @@ function withDialogue(gameObjectManager, scene, model, char) {
 
   const shouldShowDial = () => {
     if (
-      playerLocalPosition.x > -5 &&
-      playerLocalPosition.x < 5 &&
-      playerLocalPosition.z < 5 &&
-      playerLocalPosition.z > 0
+      playerLocalPosition.x > -3 &&
+      playerLocalPosition.x < 3 &&
+      playerLocalPosition.z < 7 &&
+      playerLocalPosition.z > 3
     ) {
       return true;
     } else {
@@ -1013,14 +1033,21 @@ function makeSideChar(gameObject, model, position, rotationParams) {
     getPlayerLocalPos();
   };
 
-  return { getPlayerLocalPos, update, gameObject, bounds, transform };
+  return {
+    getPlayerLocalPos,
+    update,
+    gameObject,
+    bounds,
+    transform,
+    rotationParams,
+  };
 }
 
 function makeCrab(gameObject, model) {
-  const position = { x: 15, y: 0, z: 10 };
+  const position = { x: 8, y: -1, z: 3 };
   const rotationParams = {
     vector: new THREE.Vector3(0, 1, 0),
-    radians: -Math.PI / 1.5,
+    radians: -Math.PI / 1.3,
   };
   const playerObj = this;
 
