@@ -48,7 +48,7 @@ function Index() {
   const models = {
     fish: { url: "/models/fish.gltf" },
     crab: { url: "/models/crab.gltf" },
-    dialogue: { url: "/models/dialogue.gltf" },
+    dialogue: { url: "/models/di.gltf" },
   };
 
   // Add glft property to models
@@ -131,7 +131,7 @@ function Index() {
     );
     playerObj.addComponent(player);
 
-    const crabLines = ["hello", "pupsik"];
+    const crabLines = ["hi", "hello", "sir?"];
 
     // CREATE CRAB
     const crabObj = gameObjectManager.createGameObject(scene, "crab");

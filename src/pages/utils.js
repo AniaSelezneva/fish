@@ -102,7 +102,8 @@ const createCamera = () => {
   const near = 0.1;
   const far = 1000;
   const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-  camera.position.set(-50, 0, -50);
+  camera.position.set(-50, 20, -50);
+  camera.zoom = 2;
   camera.lookAt(0, 0, 0);
 
   return camera;
@@ -111,7 +112,7 @@ const createCamera = () => {
 const createLight = (scene) => {
   const light = new THREE.PointLight(0xffcc77, 1);
   light.castShadow = true;
-  light.position.set(0, 50, 0);
+  light.position.set(0, 50, -50);
 
   {
     const light = new THREE.DirectionalLight(0xffcc77, 1);
@@ -122,6 +123,9 @@ const createLight = (scene) => {
     scene.add(light);
     scene.add(helper);
   }
+
+  // const ambLight = new THREE.AmbientLight(0xffcc77, 1);
+  // scene.add(ambLight);
 
   return light;
 };
@@ -337,7 +341,7 @@ function makeGameObject(parent, name) {
     components.push(component);
   };
 
-  function getBounds(transform) {
+  function getBounds() {
     return new THREE.Box3().setFromObject(transform);
   }
 
@@ -410,7 +414,7 @@ const makePlayer = (gameObjectManager, gameObject, model, camera) => {
   gameObject.addComponent(skinInstance);
   skinInstance.setAnimation("go ");
   let transform = gameObject.transform;
-  let bounds = gameObject.getBounds(transform);
+  let bounds = gameObject.getBounds();
   let moving = false;
   let looking = false;
   let collided = false;
@@ -488,7 +492,7 @@ const makePlayer = (gameObjectManager, gameObject, model, camera) => {
     // loaded
     for (let i = 0; i < gameObjectManager.gameObjects.array.length; i++) {
       const sideChar = gameObjectManager.gameObjects.array[i];
-      sideChar.bounds = sideChar.getBounds(sideChar.transform); // stale
+      sideChar.bounds = sideChar.getBounds(); // stale
 
       if (
         sideChar.name != "player" &&
@@ -530,7 +534,7 @@ const makePlayer = (gameObjectManager, gameObject, model, camera) => {
   };
 
   const update = (globals) => {
-    bounds = gameObject.getBounds(transform);
+    bounds = gameObject.getBounds();
     collided = didCollide();
 
     // Positions
@@ -841,16 +845,16 @@ function withEyesMovement(char) {
 
   // Override update
   update = (globals) => {
-    bounds = gameObject.getBounds(transform);
+    bounds = gameObject.getBounds();
     playerLocalPosition = getDestLocalPos();
     // Move eyes
-    if (isPlayerInFoV(playerObj)) {
-      direction = playerObj.transform.position;
-      moveEyes(globals);
-    } else {
-      direction = defaultDestToLook;
-      moveEyes(globals);
-    }
+    // if (isPlayerInFoV(playerObj)) {
+    direction = playerObj.transform.position;
+    moveEyes(globals);
+    // } else {
+    //   direction = defaultDestToLook;
+    //   moveEyes(globals);
+    // }
   };
 
   return Object.assign({}, char, { calc, update });
@@ -859,105 +863,101 @@ function withEyesMovement(char) {
 // SHOW DIALOGUE MIXIN
 function withDialogue(gameObjectManager, scene, model, char) {
   let { bounds, gameObject, getPlayerLocalPos, rotationParams } = char;
-  log(rotationParams);
+  let hideTimeoutId = undefined;
+  let initRender = true;
+
+  let lines = this;
+  let lineNum = 0;
+  let line = lines[lineNum];
+  let linesTotal = lines.length;
+
+  let texture, material;
+
   let playerLocalPosition = getPlayerLocalPos();
 
   const dialObj = gameObjectManager.createGameObject(
     scene,
     `dialogue_${gameObject.name}`
   );
-  const { transform } = dialObj;
+  makeSkinInstance(dialObj, model);
+
   const objTopCenter = {
     x: (bounds.max.x + bounds.min.x) / 2,
-    y: bounds.max.y + 1,
+    y: bounds.max.y + 2,
     z: (bounds.max.z + bounds.min.z) / 2,
   };
 
-  transform.position.set(objTopCenter.x, objTopCenter.y, objTopCenter.z);
+  dialObj.transform.position.set(
+    objTopCenter.x,
+    objTopCenter.y,
+    objTopCenter.z
+  );
 
-  // Dialogue
-  let dialTexture = undefined;
-  let lines = this;
-  let lineNum = 0;
-  let line = lines[lineNum];
-  let linesTotal = lines.length;
-  const rotRad = rotationParams.radians;
-
-  const vectorToRotate = new THREE.Vector3(0, 1, 0);
-
-  let initRender = true;
-
-  const skinInstance = makeSkinInstance(dialObj, model);
-  dialObj.addComponent(skinInstance);
+  dialObj.transform.rotateOnAxis(
+    new THREE.Vector3(0, 1, 0),
+    -rotationParams.radians
+  );
 
   createTextureWithText(line);
-  addDial();
+  createMaterialWithTexture();
+  addMaterialToObj();
 
-  // let initRender = true;
-  let hideTimeoutId = undefined;
+  // ******************** FUNCTIONS
+  function createTextureWithText(text) {
+    const ctx = document.createElement("canvas").getContext("2d");
+    const border = 2;
+    const size = 100;
+    const font = `${size}px bold sans-serif`;
+    ctx.font = font;
+    const width = ctx.measureText(text).width + border * 4;
+    const height = size + border * 4;
 
-  function createTextureWithText() {
-    const canvas = document.createElement("canvas");
-    //document.getElementById("root").appendChild(canvas);
-    const ctx = canvas.getContext("2d");
+    ctx.canvas.width = width;
+    ctx.canvas.height = height;
+    ctx.font = font;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
 
-    canvas.width = 300;
-    canvas.height = 100;
+    ctx.fillStyle = "blue";
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "white";
+    ctx.fillText(text, 2, 2);
 
-    ctx.font = "10pt Arial";
-    ctx.fillStyle = "green";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "black";
-    ctx.textAlign = "start";
-    ctx.textBaseline = "start";
+    texture = new THREE.CanvasTexture(ctx.canvas);
+    // because our canvas is likely not a power of 2
+    // in both dimensions set the filtering appropriately.
+    texture.minFilter = THREE.LinearFilter;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.flipY = false;
 
-    const lineheight = 15;
-    const lines = line.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      ctx.fillText(lines[i], 10, 30 + i * lineheight, canvas.width);
-    }
-
-    dialTexture = new THREE.CanvasTexture(canvas);
-    dialTexture.flipY = false;
-
-    dialTexture.needsUpdate = true;
+    // const lineheight = 15;
+    // const lines = line.split("\n");
+    // for (let i = 0; i < lines.length; i++) {
+    //   ctx.fillText(lines[i], 10, 30 + i * lineheight, canvas.width);
+    // }
   }
-
-  function addLight() {
-    const { x, y, z } = transform.position;
-    const light = new THREE.DirectionalLight(0xffcc77, 1);
-    light.position.set(x - 1, y, z);
-    light.target = transform;
-    scene.add(light);
+  function createMaterialWithTexture() {
+    material = new THREE.MeshStandardMaterial({
+      map: texture,
+      side: THREE.FrontSide,
+      emissive: "#f5f5f5",
+      emissiveIntensity: 0.3,
+    });
   }
-
-  function addDial() {
-    transform.rotateOnAxis(vectorToRotate, rotRad);
-
-    addLight();
-
-    addTextureToDial();
-  }
-
-  function addTextureToDial() {
-    //Traverse through sign to assign canvas as material
+  function addMaterialToObj() {
     dialObj.transform.traverse((el) => {
       if (el.isMesh) {
-        el.material.map = dialTexture;
-        el.material.side = THREE.DoubleSide;
+        el.material = material;
       }
     });
   }
-
-  const changeText = () => {
-    if (lineNum < linesTotal && lineNum >= 0) {
-      createTextureWithText(lines[lineNum]);
-      addTextureToDial();
-    } else {
-      log("this line doesn't exist");
-    }
+  const hideDial = () => {
+    dialObj.transform.visible = false;
   };
-
+  const showDial = () => {
+    dialObj.transform.visible = true;
+  };
   const shouldShowDial = () => {
     if (
       playerLocalPosition.x > -3 &&
@@ -970,18 +970,15 @@ function withDialogue(gameObjectManager, scene, model, char) {
       return false;
     }
   };
-
-  const showDial = () => {
-    transform.visible = true;
-  };
-
-  const hideDial = () => {
-    transform.visible = false;
-  };
-
-  // To change text
-  const changeLine = () => {
-    changeText(lineNum);
+  const changeLine = (num) => {
+    log(num);
+    if (num < linesTotal && num >= 0) {
+      createTextureWithText(lines[num]);
+      createMaterialWithTexture();
+      addMaterialToObj();
+    } else {
+      log("this line doesn't exist");
+    }
   };
 
   const update = (globals) => {
@@ -998,9 +995,8 @@ function withDialogue(gameObjectManager, scene, model, char) {
       } else if (!hideTimeoutId) {
         hideTimeoutId = setTimeout(() => {
           hideDial();
-          lineNum = lineNum++ % linesTotal;
-          log(lineNum);
-          changeLine(lineNum);
+          const num = lineNum++ % linesTotal;
+          changeLine(num);
         }, 2000);
       }
     }
@@ -1016,7 +1012,7 @@ function makeSideChar(gameObject, model, position, rotationParams) {
   const transform = gameObject.transform;
   transform.position.set(position.x, position.y, position.z);
   transform.rotateOnAxis(rotationParams.vector, rotationParams.radians);
-  let bounds = gameObject.getBounds(transform);
+  let bounds = gameObject.getBounds();
   let playerLocalPosition = new Vector3();
   const playerObj = this;
 
@@ -1029,7 +1025,7 @@ function makeSideChar(gameObject, model, position, rotationParams) {
   }
 
   let update = () => {
-    bounds = gameObject.getBounds(transform);
+    bounds = gameObject.getBounds();
     getPlayerLocalPos();
   };
 
