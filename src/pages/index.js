@@ -20,9 +20,12 @@ import {
   createTable,
   createWater,
   setWalls,
+  compose,
+  pipe,
 } from "./utils";
 
 const log = console.log;
+const crabLines = ["hi, Sot", "hello", "sir?"];
 
 function Index() {
   const canvas = useRef();
@@ -87,7 +90,7 @@ function Index() {
     createControls(camera, canvas.current);
 
     const axesHelper = new THREE.AxesHelper(5);
-    scene.add(axesHelper);
+    //scene.add(axesHelper);
 
     const withCounter = {
       bubblesTotal: 0,
@@ -131,20 +134,24 @@ function Index() {
     );
     playerObj.addComponent(player);
 
-    const crabLines = ["hi", "hello", "sir?"];
-
     // CREATE CRAB
     const crabObj = gameObjectManager.createGameObject(scene, "crab");
-    const crab = withDialogue.call(
-      crabLines,
-      gameObjectManager,
-      scene,
-      models.dialogue,
-      withEyesMovement.call(
-        playerObj,
-        makeCrab.call(playerObj, crabObj, models.crab)
-      )
-    );
+    const crab = pipe(
+      makeCrab(playerObj, crabObj, models.crab),
+      withEyesMovement(playerObj),
+      withDialogue(crabLines, gameObjectManager, scene, models.dialogue)
+    )();
+
+    // const crab = withDialogue.call(
+    //   crabLines,
+    //   gameObjectManager,
+    //   scene,
+    //   models.dialogue,
+    //   withEyesMovement.call(
+    //     playerObj,
+    //     makeCrab.call(playerObj, crabObj, models.crab)
+    //   )
+    // );
     crabObj.addComponent(crab);
 
     // RENDER
@@ -215,7 +222,7 @@ function Index() {
   return (
     <div className={styles.wrapper}>
       <canvas ref={canvas} id={styles.canv} />
-      <canvas ref={inventory} id={styles.inventory} />
+      {/* <canvas ref={inventory} id={styles.inventory} /> */}
     </div>
   );
 }

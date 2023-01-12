@@ -8,15 +8,18 @@ const log = console.log;
 const width = 30;
 const height = 20;
 
-function compose(...fns) {
-  return function composed(value) {
-    let listOfFunctions = fns.slice();
-    while (listOfFunctions.length > 0) {
-      value = listOfFunctions.pop(value);
-    }
-    return value;
-  };
-}
+const compose =
+  (...fns) =>
+  (x) =>
+    fns.reduceRight((y, f) => {
+      log(f);
+      return f(y);
+    }, x);
+
+const pipe =
+  (...fns) =>
+  () =>
+    fns.reduce((acc, f) => f(acc), null);
 
 function getRandomArbitrary(min, max) {
   return Math.random() * (max - min) + min;
@@ -121,7 +124,7 @@ const createLight = (scene) => {
 
     const helper = new THREE.DirectionalLightHelper(light);
     scene.add(light);
-    scene.add(helper);
+    //scene.add(helper);
   }
 
   // const ambLight = new THREE.AmbientLight(0xffcc77, 1);
@@ -758,251 +761,259 @@ function makeBubbles(globals, gameObjectManager, scene, amount, floor, camera) {
 }
 
 // EYES MOVEMENT MIXIN
-function withEyesMovement(char) {
-  let { transform, update, gameObject, bounds, getPlayerLocalPos } = char;
-  const eyes = { left: undefined, right: undefined };
-  let direction = new Vector3(); // direction towards which crab's eyes will move
-  const defaultDestToLook = new Vector3(0, 0, 0);
-  let playerLocalPosition = getPlayerLocalPos();
+function withEyesMovement(playerObj) {
+  return function (char) {
+    log(char);
+    log(playerObj);
+    let { transform, update, gameObject, bounds, getPlayerLocalPos } = char;
+    const eyes = { left: undefined, right: undefined };
+    let direction = new Vector3(); // direction towards which crab's eyes will move
+    const defaultDestToLook = new Vector3(0, 0, 0);
+    let playerLocalPosition = getPlayerLocalPos();
 
-  // Traverse through crab to find eyes' bones
-  transform.traverse((el) => {
-    if (el.isBone) {
-      if (el.name === "lefteye") {
-        eyes.left = el;
+    // Traverse through crab to find eyes' bones
+    transform.traverse((el) => {
+      if (el.isBone) {
+        if (el.name === "lefteye") {
+          eyes.left = el;
+        }
+        if (el.name === "righteye") {
+          eyes.right = el;
+        }
       }
-      if (el.name === "righteye") {
-        eyes.right = el;
+    });
+
+    //let playerObj = this;
+    let destLocalPosition = new Vector3();
+    let eyeLocalPos = new Vector3();
+    let rotationMatrix = new Matrix4();
+    let targetQ = new Quaternion();
+    let destWorldPos, step;
+
+    // CALC DESTINATION POSITION IN EYE SPACE
+    const getDestLocalPos = () => {
+      // Destination world position
+      destWorldPos = new Vector3().copy(direction);
+      // Destination position in eye space
+      destLocalPosition.copy(destWorldPos);
+      eyes.right.worldToLocal(destLocalPosition);
+    };
+
+    // GET EYE LOCAL POSITION (SUBVECTOR)
+    const getEyeLocalPos = () => {
+      eyeLocalPos.subVectors(eyes.right.position, eyes.left.position);
+    };
+
+    // ROTATE ROTATION MATRIX
+    const rotateMatrix4 = () => {
+      rotationMatrix.lookAt(destLocalPosition, eyeLocalPos, eyes.right.up);
+    };
+
+    // CALCULATE FINAL QUATERNION
+    const setTargetQ = () => {
+      targetQ.setFromRotationMatrix(rotationMatrix);
+    };
+
+    // SEE IF PLAYER IS IN THE FIELD OF VIEW
+    const isPlayerInFoV = () => {
+      if (
+        playerObj.transform.position.x <= transform.position.x &&
+        playerObj.transform.position.x >= transform.position.x - 11 &&
+        playerObj.transform.position.z >= transform.position.z - 13 &&
+        playerObj.transform.position.z <= transform.position.z + 1
+      ) {
+        return true;
+      } else {
+        return false;
       }
-    }
-  });
+    };
 
-  let playerObj = this;
-  let destLocalPosition = new Vector3();
-  let eyeLocalPos = new Vector3();
-  let rotationMatrix = new Matrix4();
-  let targetQ = new Quaternion();
-  let destWorldPos, step;
+    // CALCULATE EVERYTHING
+    const calc = () => {
+      getDestLocalPos();
+      getEyeLocalPos();
+      rotateMatrix4();
+      setTargetQ();
+    };
 
-  // CALC DESTINATION POSITION IN EYE SPACE
-  const getDestLocalPos = () => {
-    // Destination world position
-    destWorldPos = new Vector3().copy(direction);
-    // Destination position in eye space
-    destLocalPosition.copy(destWorldPos);
-    eyes.right.worldToLocal(destLocalPosition);
+    // MOVE EYES
+    const moveEyes = (globals) => {
+      step = globals.delta * globals.moveSpeed;
+
+      // Recalculate destination local pos, eye local pos, rotation matrix
+      // and final quaternion
+      calc();
+
+      // Update eye quaternion
+      eyes.left.quaternion.rotateTowards(targetQ, step);
+      eyes.right.quaternion.rotateTowards(targetQ, step);
+    };
+
+    // Override update
+    update = (globals) => {
+      bounds = gameObject.getBounds();
+      playerLocalPosition = getDestLocalPos();
+      // Move eyes
+      // if (isPlayerInFoV(playerObj)) {
+      direction = playerObj.transform.position;
+      moveEyes(globals);
+      // } else {
+      //   direction = defaultDestToLook;
+      //   moveEyes(globals);
+      // }
+    };
+
+    return Object.assign({}, char, { calc, update });
   };
-
-  // GET EYE LOCAL POSITION (SUBVECTOR)
-  const getEyeLocalPos = () => {
-    eyeLocalPos.subVectors(eyes.right.position, eyes.left.position);
-  };
-
-  // ROTATE ROTATION MATRIX
-  const rotateMatrix4 = () => {
-    rotationMatrix.lookAt(destLocalPosition, eyeLocalPos, eyes.right.up);
-  };
-
-  // CALCULATE FINAL QUATERNION
-  const setTargetQ = () => {
-    targetQ.setFromRotationMatrix(rotationMatrix);
-  };
-
-  // SEE IF PLAYER IS IN THE FIELD OF VIEW
-  const isPlayerInFoV = () => {
-    if (
-      playerObj.transform.position.x <= transform.position.x &&
-      playerObj.transform.position.x >= transform.position.x - 11 &&
-      playerObj.transform.position.z >= transform.position.z - 13 &&
-      playerObj.transform.position.z <= transform.position.z + 1
-    ) {
-      return true;
-    } else {
-      return false;
-    }
-  };
-
-  // CALCULATE EVERYTHING
-  const calc = () => {
-    getDestLocalPos();
-    getEyeLocalPos();
-    rotateMatrix4();
-    setTargetQ();
-  };
-
-  // MOVE EYES
-  const moveEyes = (globals) => {
-    step = globals.delta * globals.moveSpeed;
-
-    // Recalculate destination local pos, eye local pos, rotation matrix
-    // and final quaternion
-    calc();
-
-    // Update eye quaternion
-    eyes.left.quaternion.rotateTowards(targetQ, step);
-    eyes.right.quaternion.rotateTowards(targetQ, step);
-  };
-
-  // Override update
-  update = (globals) => {
-    bounds = gameObject.getBounds();
-    playerLocalPosition = getDestLocalPos();
-    // Move eyes
-    // if (isPlayerInFoV(playerObj)) {
-    direction = playerObj.transform.position;
-    moveEyes(globals);
-    // } else {
-    //   direction = defaultDestToLook;
-    //   moveEyes(globals);
-    // }
-  };
-
-  return Object.assign({}, char, { calc, update });
 }
 
 // SHOW DIALOGUE MIXIN
-function withDialogue(gameObjectManager, scene, model, char) {
-  let { bounds, gameObject, getPlayerLocalPos, rotationParams } = char;
-  let hideTimeoutId = undefined;
-  let initRender = true;
+function withDialogue(lines, gameObjectManager, scene, model) {
+  return function (char) {
+    log(char);
+    let { bounds, gameObject, getPlayerLocalPos, rotationParams } = char;
+    let hideTimeoutId = undefined;
+    let initRender = true;
 
-  let lines = this;
-  let lineNum = 0;
-  let line = lines[lineNum];
-  let linesTotal = lines.length;
+    // let lines = this;
+    let lineNum = 0;
+    let line = lines[lineNum];
+    let linesTotal = lines.length;
 
-  let texture, material;
+    let texture, material;
 
-  let playerLocalPosition = getPlayerLocalPos();
+    let playerLocalPosition = getPlayerLocalPos();
 
-  const dialObj = gameObjectManager.createGameObject(
-    scene,
-    `dialogue_${gameObject.name}`
-  );
-  makeSkinInstance(dialObj, model);
+    const dialObj = gameObjectManager.createGameObject(
+      scene,
+      `dialogue_${gameObject.name}`
+    );
+    makeSkinInstance(dialObj, model);
 
-  const objTopCenter = {
-    x: (bounds.max.x + bounds.min.x) / 2,
-    y: bounds.max.y + 2,
-    z: (bounds.max.z + bounds.min.z) / 2,
-  };
+    const objTopCenter = {
+      x: (bounds.max.x + bounds.min.x) / 2,
+      y: bounds.max.y + 2,
+      z: (bounds.max.z + bounds.min.z) / 2,
+    };
 
-  dialObj.transform.position.set(
-    objTopCenter.x,
-    objTopCenter.y,
-    objTopCenter.z
-  );
+    dialObj.transform.position.set(
+      objTopCenter.x,
+      objTopCenter.y,
+      objTopCenter.z
+    );
 
-  dialObj.transform.rotateOnAxis(
-    new THREE.Vector3(0, 1, 0),
-    -rotationParams.radians
-  );
+    dialObj.transform.rotateOnAxis(
+      new THREE.Vector3(0, 1, 0),
+      -rotationParams.radians
+    );
 
-  createTextureWithText(line);
-  createMaterialWithTexture();
-  addMaterialToObj();
+    createTextureWithText(line);
+    createMaterialWithTexture();
+    addMaterialToObj();
 
-  // ******************** FUNCTIONS
-  function createTextureWithText(text) {
-    const ctx = document.createElement("canvas").getContext("2d");
-    const border = 2;
-    const size = 100;
-    const font = `${size}px bold sans-serif`;
-    ctx.font = font;
-    const width = ctx.measureText(text).width + border * 4;
-    const height = size + border * 4;
+    // ******************** FUNCTIONS
+    function createTextureWithText(text) {
+      const ctx = document.createElement("canvas").getContext("2d");
+      const border = 2;
+      const size = 100;
+      const font = `${size}px bold sans-serif`;
+      ctx.font = font;
+      const width = ctx.measureText(text).width + border * 4;
+      const height = size + border * 4;
 
-    ctx.canvas.width = width;
-    ctx.canvas.height = height;
-    ctx.font = font;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
+      ctx.canvas.width = width;
+      ctx.canvas.height = height;
+      ctx.font = font;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
 
-    ctx.fillStyle = "blue";
-    ctx.fillRect(0, 0, width, height);
-    ctx.fillStyle = "white";
-    ctx.fillText(text, 2, 2);
+      ctx.fillStyle = "blue";
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = "white";
+      ctx.fillText(text, 2, 2);
 
-    texture = new THREE.CanvasTexture(ctx.canvas);
-    // because our canvas is likely not a power of 2
-    // in both dimensions set the filtering appropriately.
-    texture.minFilter = THREE.LinearFilter;
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.flipY = false;
+      texture = new THREE.CanvasTexture(ctx.canvas);
+      // because our canvas is likely not a power of 2
+      // in both dimensions set the filtering appropriately.
+      texture.minFilter = THREE.LinearFilter;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.flipY = false;
 
-    // const lineheight = 15;
-    // const lines = line.split("\n");
-    // for (let i = 0; i < lines.length; i++) {
-    //   ctx.fillText(lines[i], 10, 30 + i * lineheight, canvas.width);
-    // }
-  }
-  function createMaterialWithTexture() {
-    material = new THREE.MeshStandardMaterial({
-      map: texture,
-      side: THREE.FrontSide,
-      emissive: "#f5f5f5",
-      emissiveIntensity: 0.3,
-    });
-  }
-  function addMaterialToObj() {
-    dialObj.transform.traverse((el) => {
-      if (el.isMesh) {
-        el.material = material;
+      // const lineheight = 15;
+      // const lines = line.split("\n");
+      // for (let i = 0; i < lines.length; i++) {
+      //   ctx.fillText(lines[i], 10, 30 + i * lineheight, canvas.width);
+      // }
+    }
+    function createMaterialWithTexture() {
+      material = new THREE.MeshStandardMaterial({
+        map: texture,
+        side: THREE.FrontSide,
+        emissive: "#f5f5f5",
+        emissiveIntensity: 0.3,
+      });
+      log(material);
+    }
+    function addMaterialToObj() {
+      dialObj.transform.traverse((el) => {
+        if (el.isMesh) {
+          el.material = material;
+        }
+      });
+    }
+    const hideDial = () => {
+      dialObj.transform.visible = false;
+    };
+    const showDial = () => {
+      dialObj.transform.visible = true;
+    };
+    const shouldShowDial = () => {
+      if (
+        playerLocalPosition.x > -3 &&
+        playerLocalPosition.x < 3 &&
+        playerLocalPosition.z < 7 &&
+        playerLocalPosition.z > 3
+      ) {
+        return true;
+      } else {
+        return false;
       }
-    });
-  }
-  const hideDial = () => {
-    dialObj.transform.visible = false;
-  };
-  const showDial = () => {
-    dialObj.transform.visible = true;
-  };
-  const shouldShowDial = () => {
-    if (
-      playerLocalPosition.x > -3 &&
-      playerLocalPosition.x < 3 &&
-      playerLocalPosition.z < 7 &&
-      playerLocalPosition.z > 3
-    ) {
-      return true;
-    } else {
-      return false;
-    }
-  };
-  const changeLine = (num) => {
-    log(num);
-    if (num < linesTotal && num >= 0) {
-      createTextureWithText(lines[num]);
-      createMaterialWithTexture();
-      addMaterialToObj();
-    } else {
-      log("this line doesn't exist");
-    }
-  };
+    };
+    const changeLine = (num) => {
+      log(num);
+      if (num < linesTotal && num >= 0) {
+        createTextureWithText(lines[num]);
+        createMaterialWithTexture();
+        addMaterialToObj();
+      } else {
+        log("this line doesn't exist");
+      }
+    };
 
-  const update = (globals) => {
-    char.update(globals);
-    playerLocalPosition = getPlayerLocalPos();
-    if (shouldShowDial()) {
-      clearTimeout(hideTimeoutId);
-      hideTimeoutId = undefined;
-      showDial();
-    } else {
-      if (initRender) {
-        hideDial();
-        initRender = false;
-      } else if (!hideTimeoutId) {
-        hideTimeoutId = setTimeout(() => {
+    const update = (globals) => {
+      char.update(globals);
+      playerLocalPosition = getPlayerLocalPos();
+      if (shouldShowDial()) {
+        clearTimeout(hideTimeoutId);
+        hideTimeoutId = undefined;
+        showDial();
+      } else {
+        if (initRender) {
           hideDial();
-          const num = lineNum++ % linesTotal;
-          changeLine(num);
-        }, 2000);
+          initRender = false;
+        } else if (!hideTimeoutId) {
+          hideTimeoutId = setTimeout(() => {
+            hideDial();
+            const num = lineNum++ % linesTotal;
+            changeLine(num);
+          }, 2000);
+        }
       }
-    }
-  };
+    };
 
-  return Object.assign({}, char, { update });
+    return Object.assign({}, char, { update });
+  };
 }
 
 // Base
@@ -1039,23 +1050,25 @@ function makeSideChar(gameObject, model, position, rotationParams) {
   };
 }
 
-function makeCrab(gameObject, model) {
-  const position = { x: 8, y: -1, z: 3 };
-  const rotationParams = {
-    vector: new THREE.Vector3(0, 1, 0),
-    radians: -Math.PI / 1.3,
+function makeCrab(playerObj, gameObject, model) {
+  return function () {
+    const position = { x: 8, y: -1, z: 3 };
+    const rotationParams = {
+      vector: new THREE.Vector3(0, 1, 0),
+      radians: -Math.PI / 1.3,
+    };
+    //const playerObj = this;
+
+    const prototype = makeSideChar.call(
+      playerObj,
+      gameObject,
+      model,
+      position,
+      rotationParams
+    );
+
+    return prototype;
   };
-  const playerObj = this;
-
-  const prototype = makeSideChar.call(
-    playerObj,
-    gameObject,
-    model,
-    position,
-    rotationParams
-  );
-
-  return prototype;
 }
 
 export {
@@ -1075,4 +1088,6 @@ export {
   createTable,
   createWater,
   setWalls,
+  compose,
+  pipe,
 };
