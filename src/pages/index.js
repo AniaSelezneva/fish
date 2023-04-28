@@ -25,7 +25,7 @@ import {
 } from "./utils";
 
 const log = console.log;
-const crabLines = ["oh hi", "Mark!", "Michael?"];
+const crabLines = ["oh hi", "Mark!", "Sir?"];
 
 function Index() {
   const canvas = useRef();

@@ -120,7 +120,7 @@ const createLight = (scene) => {
   {
     const light = new THREE.DirectionalLight(0xffcc77, 1);
     light.castShadow = true;
-    light.position.set(-50, 50, 100);
+    light.position.set(0, 50, 0);
 
     const helper = new THREE.DirectionalLightHelper(light);
     scene.add(light);
